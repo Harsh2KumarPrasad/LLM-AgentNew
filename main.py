@@ -13,6 +13,7 @@ import markdown
 import csv
 import duckdb
 from PIL import Image
+import platform
 
 # Load OpenAI API Key
 AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
@@ -26,9 +27,10 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all methods
     allow_headers=["*"],  # Allow all headers
 )
-DATA_DIR = Path("/data")
-
-
+if platform.system() == "Windows":
+    DATA_DIR = Path("C:/data")  # Use Windows-compatible path
+else:
+    DATA_DIR = Path("/data")
 TASK_TOOLS = [
     {
         # A1: Install and run datagen.py
@@ -135,7 +137,7 @@ TASK_TOOLS = [
 def call_llm(prompt: str) -> dict:
     headers = {"Authorization": f"Bearer {AIPROXY_TOKEN}"}
     data = {"model": "gpt-4o-mini", 
-           "messages": [{"role": "system", "content": "You are an automation agent. Return structured JSON for execution."}, {"role": "user", "content": prompt}],
+           "messages": [{"role": "system", "content": "You are a multilingual automation agent. Return structured JSON for execution."}, {"role": "user", "content": prompt}],
              "tools": TASK_TOOLS,
             "tool_choice": "required",}
     print(data)
