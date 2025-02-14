@@ -509,8 +509,8 @@ def extract_credit_card(image_path: str, output_file: str):
 def find_similar_comments(input_file: str, output_file: str):
     """Finds the most similar comments in a given file using embeddings."""
     
-    input_file_path = Path(DATA_DIR) / input_file.lstrip("/")
-    output_file_path = Path(DATA_DIR) / output_file.lstrip("/")
+    input_file_path = Path(DATA_DIR) /  Path(os.path.normpath(input_file).lstrip("\\/"))
+    output_file_path = Path(DATA_DIR) / Path(os.path.normpath(output_file).lstrip("\\/"))
 
     if not input_file_path.exists():
         raise FileNotFoundError(f"Input file '{input_file}' not found!")
