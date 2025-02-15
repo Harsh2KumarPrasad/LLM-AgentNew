@@ -13,6 +13,8 @@ import shutil
 import markdown
 import csv
 import duckdb
+import sqlite3
+from sentence_transformers import SentenceTransformer, util
 from PIL import Image
 import platform
 import re
@@ -21,7 +23,7 @@ import base64
 import pytesseract
 
 # Load OpenAI API Key
-AIPROXY_TOKEN = os.getenv("")
+AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
 LLM_API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 print(os.getenv("AIPROXY_TOKEN"))
 app = FastAPI()
@@ -246,17 +248,7 @@ def call_llm_for_sender_email(email_text: str) -> str:
     print(from_email)
     return from_email
 
-def call_llm_for_credit_card_extraction(base64_image: str) -> str:
-    """Calls ChatGPT API to extract text from an image (Base64 format)."""
-
-    headers = {"Authorization": f"Bearer {AIPROXY_TOKEN}", "Content-Type": "application/json"}
-    data = {
-        "model": "gpt-4o-mini-2024-07-18",  # Use GPT-4 with vision capabilities
-        "messages": [
-            {"role": "system", "content": "Extract the credit card number from the image provided."},
-            {"role": "user", "content": f"Here is an image encoded in Base64: {base64_image}"}
-        ]
-    }
+ 
 
     response=httpx.post(LLM_API_URL, json=data, headers=headers,verify=False,timeout=20)
     print("RAW Image RESPONSE:", response.json()) 
@@ -265,8 +257,7 @@ def call_llm_for_credit_card_extraction(base64_image: str) -> str:
     #return extracted_text
 
 def call_llm(prompt: str) -> dict:
-    headers = {"Content-type":"application/json",
-        "Authorization": f"Bearer {AIPROXY_TOKEN}",}
+    headers = {"Authorization": f"Bearer {AIPROXY_TOKEN}"}
     data = {"model": "gpt-4o-mini", 
            "messages": [{"role": "system", "content": """
                          You are a multilingual automation agent.
@@ -516,21 +507,28 @@ def extract_credit_card(image_path: str, output_file: str):
     return "No credit card numbers detected in the image."
 
 
-#A9 Implementation
+# Function to execute shell commands
+def run_command(command: List[str]):
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+        return {"status": "success", "message": "Command executed successfully."}
+    except subprocess.CalledProcessError as e:
+        return {"status": "error", "message": str(e)}
+
+# A9: Find most similar comments in a file
+@app.post("/find_similar_comments")
 def find_similar_comments(input_file: str, output_file: str):
-    """Finds the most similar comments in a given file using embeddings."""
-    
-    input_file_path = Path(DATA_DIR) /  Path(os.path.normpath(input_file).lstrip("\\/"))
-    output_file_path = Path(DATA_DIR) / Path(os.path.normpath(output_file).lstrip("\\/"))
+    input_file_path = DATA_DIR / Path(input_file.lstrip("/"))
+    output_file_path = DATA_DIR / Path(output_file.lstrip("/"))
 
     if not input_file_path.exists():
-        raise FileNotFoundError(f"Input file '{input_file}' not found!")
+        raise HTTPException(status_code=404, detail=f"Input file '{input_file}' not found!")
 
     with open(input_file_path, "r", encoding="utf-8") as f:
         comments = [line.strip() for line in f.readlines()]
 
     if len(comments) < 2:
-        return "Not enough comments for similarity comparison."
+        return {"status": "error", "message": "Not enough comments for similarity comparison."}
 
     model = SentenceTransformer("all-MiniLM-L6-v2")
     embeddings = model.encode(comments, convert_to_tensor=True)
@@ -550,33 +548,30 @@ def find_similar_comments(input_file: str, output_file: str):
 
     result = {"Most Similar Comments": best_pair, "Similarity Score": max_score}
     output_file_path.write_text(json.dumps(result, indent=4), encoding="utf-8")
-    Response.status_code=200
-    return f"Most similar comments saved to {output_file}."
-
-# A10 Implementation
-def compute_ticket_sales(db_path: str, ticket_type: str, output_file: str):
-    """Computes total sales for a specific ticket type from an SQLite database."""
     
-    db_path_obj = Path(DATA_DIR) / db_path.lstrip("/")
-    output_file_path = Path(DATA_DIR) / output_file.lstrip("/")
+    return {"status": "success", "message": f"Most similar comments saved to {output_file}", "data": result}
+
+# A10: Compute total ticket sales
+@app.post("/compute_ticket_sales")
+def compute_ticket_sales(db_path: str, ticket_type: str, output_file: str):
+    db_path_obj = DATA_DIR / db_path.lstrip("/")
+    output_file_path = DATA_DIR / output_file.lstrip("/")
 
     if not db_path_obj.exists():
-        raise FileNotFoundError(f"Database file '{db_path}' not found!")
+        raise HTTPException(status_code=404, detail="Database file not found")
 
-    conn = sqlite3.connect(db_path_obj)
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT SUM(price) FROM tickets WHERE type = ?", (ticket_type,))
-    total_sales = cursor.fetchone()[0]
-
-    conn.close()
-
-    if total_sales is None:
-        total_sales = 0
+    try:
+        conn = sqlite3.connect(db_path_obj)
+        cursor = conn.cursor()
+        cursor.execute("SELECT SUM(price) FROM tickets WHERE type = ?", (ticket_type,))
+        total_sales = cursor.fetchone()[0] or 0
+        conn.close()
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     output_file_path.write_text(str(total_sales), encoding="utf-8")
-    Response.status_code=200
-    return f"Total sales for {ticket_type} tickets: {total_sales}"
+    return {"status": "success", "message": f"Total sales for {ticket_type}: {total_sales}", "total_sales": total_sales}
+
 
 if __name__ == "__main__":
     import uvicorn
