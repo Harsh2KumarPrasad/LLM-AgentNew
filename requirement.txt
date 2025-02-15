@@ -1,0 +1,9 @@
+fastapi 
+pillow 
+uvicorn 
+markdown 
+duckdb 
+requests 
+httpx 
+pytesseract  
+sentence_transformers

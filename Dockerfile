@@ -8,7 +8,8 @@ ADD https://astral.sh/uv/install.sh /uv-installer.sh
 
 # Run the installer then remove it
 RUN sh /uv-installer.sh && rm /uv-installer.sh
-RUN pip install fastapi pillow uvicorn markdown duckdb requests httpx pytesseract  sentence_transformers
+
+RUN pip install --no-cache-dir -r requirement.txt
 # Ensure the installed binary is on the 'PATH'
 ENV PATH="/root/.local/bin/:$PATH"
 
