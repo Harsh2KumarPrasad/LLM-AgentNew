@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
 import os
-
+from typing import List
 import json
 import subprocess
 from pathlib import Path
@@ -17,11 +17,11 @@ from PIL import Image
 import platform
 import re
 import base64
-import easyocr
+#import easyocr
 import pytesseract
 
 # Load OpenAI API Key
-AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
+AIPROXY_TOKEN = os.getenv("")
 LLM_API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 print(os.getenv("AIPROXY_TOKEN"))
 app = FastAPI()
@@ -42,13 +42,18 @@ TASK_TOOLS = [
         "type": "function",
         "function": {
             "name": "install_and_run_datagen",
-            "description": "Install uv (if required) and run datagen.py with the provided email.",
+            "description": "Install a package and run the script with the provided arguments.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "email": {"type": "string", "description": "The email of the user"}
+                    "args": {"type": "array",
+                    "items":{"type":"string"
+                    },
+                    "description": "List of argument from user user"},
+                    "script":{"type":"string","description":"The script that is to be run"}
+                    
                 },
-                "required": ["email"],
+                "required": ["args","script"],
                 "additionalProperties": False
             },
             "strict": True
@@ -260,17 +265,20 @@ def call_llm_for_credit_card_extraction(base64_image: str) -> str:
     #return extracted_text
 
 def call_llm(prompt: str) -> dict:
-    headers = {"Authorization": f"Bearer {AIPROXY_TOKEN}"}
+    headers = {"Content-type":"application/json",
+        "Authorization": f"Bearer {AIPROXY_TOKEN}",}
     data = {"model": "gpt-4o-mini", 
-           "messages": [{"role": "system", "content": "You are a multilingual automation agent. Return structured JSON for execution."}, {"role": "user", "content": prompt}],
+           "messages": [{"role": "system", "content": """
+                         You are a multilingual automation agent.
+                         If your task involve running a script then use run_task
+                         Return structured JSON for execution.If the """}, {"role": "user", "content": prompt}],
              "tools": TASK_TOOLS,
             "tool_choice": "required",}
-    print(data)
+    
     response = httpx.post(LLM_API_URL, json=data, headers=headers,verify=False,timeout=20) 
     print("RAW LLM RESPONSE:", response.json())  # Debugging
-    print(AIPROXY_TOKEN)
-    func_name= response.json()["choices"][0]["message"]["tool_calls"][0]["function"]["name"]
-    params_val= response.json()["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
+    
+    
     func=response.json()["choices"][0]["message"]["tool_calls"][0]["function"]
     return func
     # print("params_val",type(params_val))
@@ -315,12 +323,15 @@ def read_file(path: str = Query(...)):
     return file_path.read_text()
 
 # A1 Implementation
-def install_and_run_datagen(email: str):
+def install_and_run_datagen(args: List[str],script: str,):
 
     print("Running A1:")
-    print("email:",email)
     
-    subprocess.run(f"uv run https://raw.githubusercontent.com/sanand0/tools-in-data-science-public/tds-2025-01/project-1/datagen.py {email}", shell=True, check=True)
+    email=args[0]
+    print("email:",email)
+    print("script", script)
+    command = ["uv", "run", script,email] 
+    subprocess.run(command, check=True)
     Response.status_code=200
     return "Data generation complete."
 
