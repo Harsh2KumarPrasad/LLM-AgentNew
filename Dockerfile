@@ -8,8 +8,8 @@ ADD https://astral.sh/uv/install.sh /uv-installer.sh
 
 # Run the installer then remove it
 RUN sh /uv-installer.sh && rm /uv-installer.sh
-COPY requirement.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirement.txt
+
+RUN pip install --no-cache-dir -r requirements.txt
 # Ensure the installed binary is on the 'PATH'
 ENV PATH="/root/.local/bin/:$PATH"
 
